@@ -1,0 +1,30 @@
+functionsDirectory = "C:\\Users\\MagnusFlemmenHellsaa\\vm2026-tipping\\netlify\\functions"
+functionsDirectoryOrigin = "config"
+plugins = []
+headers = []
+redirects = []
+
+[build]
+publish = "C:\\Users\\MagnusFlemmenHellsaa\\vm2026-tipping\\dist"
+publishOrigin = "config"
+commandOrigin = "config"
+command = "npm run build"
+functions = "C:\\Users\\MagnusFlemmenHellsaa\\vm2026-tipping\\netlify\\functions"
+
+[build.environment]
+
+[build.processing]
+
+[build.processing.css]
+
+[build.processing.html]
+
+[build.processing.images]
+
+[build.processing.js]
+
+[build.services]
+
+[functions]
+
+[functions."*"]
