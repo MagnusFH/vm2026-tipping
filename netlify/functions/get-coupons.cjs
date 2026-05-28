@@ -1,25 +1,19 @@
 import { getStore } from "@netlify/blobs";
 
 export default async (req, context) => {
-  // Sjekk at det er en POST-forespørsel
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
-
   try {
-    // Hent ut json-dataen fra forespørselen på moderne vis
-    const bodyText = await req.text();
-    const coupon = JSON.parse(bodyText);
+    // Hent butikk-databasen vår side-wide
+    const store = getStore("coupons_store");
+    const listResult = await store.list();
+    const coupons = [];
 
-    if (!coupon.userId || !coupon.userName) {
-      return new Response("Invalid Coupon Schema", { status: 400 });
+    // Bla igjennom alle lagrede tippekuponger
+    for (const key of listResult.blobs) {
+      const dataStr = await store.get(key.key);
+      if (dataStr) coupons.push(JSON.parse(dataStr));
     }
 
-    // Her kobler Netlify Blobs seg på helt automatisk!
-    const store = getStore("coupons_store");
-    await store.set(coupon.userId, JSON.stringify(coupon));
-
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify(coupons), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });
