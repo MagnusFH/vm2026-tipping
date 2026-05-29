@@ -3170,7 +3170,7 @@ export default function App() {
               <div className="px-5 py-4.5 bg-slate-900/50 border-b border-slate-850 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="font-extrabold text-base text-white flex items-center gap-2">
-                    <Award className="w-5 h-5 text-emerald-400" /> Resultattabell &amp; Poengberegning
+                    <Award className="w-5 h-5 text-emerald-400" /> Resultattabell &amp; poengberegning
                   </h3>
                   <p className="text-xs text-slate-400">Poeng oppdateres automatisk basert på registrerte resultater</p>
                 </div>
