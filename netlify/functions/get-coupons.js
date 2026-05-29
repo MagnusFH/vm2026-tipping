@@ -2,12 +2,10 @@ import { getStore } from "@netlify/blobs";
 
 export default async (req, context) => {
   try {
-    // Hent butikk-databasen vår side-wide
     const store = getStore("coupons_store");
     const listResult = await store.list();
     const coupons = [];
 
-    // Bla igjennom alle lagrede tippekuponger
     for (const key of listResult.blobs) {
       const dataStr = await store.get(key.key);
       if (dataStr) coupons.push(JSON.parse(dataStr));

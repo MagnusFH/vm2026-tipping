@@ -1,3 +1,22 @@
 {
-	"siteId": "fb9934df-bb1b-4671-867a-e193ff6049c0"
+	"siteId": "fb9934df-bb1b-4671-867a-e193ff6049c0",
+	"dbConnectionString": "postgres://localhost:57126/postgres",
+	"geolocation": {
+		"data": {
+			"city": "Bryne",
+			"country": {
+				"code": "NO",
+				"name": "Norway"
+			},
+			"subdivision": {
+				"code": "11",
+				"name": "Rogaland"
+			},
+			"timezone": "Europe/Oslo",
+			"latitude": 58.773,
+			"longitude": 5.5778,
+			"postalCode": "4341"
+		},
+		"timestamp": 1780040565446
+	}
 }
