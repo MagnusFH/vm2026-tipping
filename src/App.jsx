@@ -254,31 +254,20 @@ export default function App() {
   const [isGeneratingClassicPdf, setIsGeneratingClassicPdf] = useState(false);
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
 
-  // Match results mock database (for the 'Kamper & resultater' view)
-  const [actualResults, setActualResults] = useState({
-    'A1': { played: true, homeScore: 1, awayScore: 1 },
-    'A2': { played: true, homeScore: 2, awayScore: 1 },
-    'A3': { played: false, homeScore: 0, awayScore: 0 },
-    'A4': { played: false, homeScore: 0, awayScore: 0 },
-    'A5': { played: false, homeScore: 0, awayScore: 0 },
-    'A6': { played: false, homeScore: 0, awayScore: 0 },
-    'B1': { played: true, homeScore: 0, awayScore: 2 },
-    'B2': { played: false, homeScore: 0, awayScore: 0 },
-    'C1': { played: true, homeScore: 3, awayScore: 0 },
-    'C2': { played: true, homeScore: 1, awayScore: 1 }
-  });
+// Match results database - initialized empty so it only shows what is fetched or edited
+  const [actualResults, setActualResults] = useState({});
 
   // Playoff state sub-tab for results
   const [resultsSubTab, setResultsSubTab] = useState('groups'); // 'groups' or 'playoffs'
 
-  // Actual Playoff Results (for calculating full playoffs in "Poengoversikt")
+  // Actual Playoff Results - initialized empty for a clean slate
   const [actualPlayoffs, setActualPlayoffs] = useState({
-    r16: ['Mexico', 'Sør-Korea', 'Canada', 'Brasil', 'Haiti'],
-    r8: ['Mexico', 'Brasil'],
-    r4: ['Brasil'],
-    r2: ['Brasil'],
-    winner: 'Brasil',
-    topscorer: 'Neymar Jr'
+    r16: [],
+    r8: [],
+    r4: [],
+    r2: [],
+    winner: '',
+    topscorer: ''
   });
 
   const [editingMatchId, setEditingMatchId] = useState(null);
@@ -286,11 +275,12 @@ export default function App() {
   const [tempAwayScore, setTempAwayScore] = useState(0);
   const [pointsSearchQuery, setPointsSearchQuery] = useState('');
 
-  // API-FOOTBALL Integration states
+// API-FOOTBALL Integration states
   const [apiSettings, setApiSettings] = useState({
     apiKey: '',
     lastSync: 'Aldri synkronisert'
   });
+  const [adminSecret, setAdminSecret] = useState(localStorage.getItem('tippekonkurranse_admin_secret') || '');
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -341,8 +331,23 @@ export default function App() {
     const storedLastSync = localStorage.getItem('tippekonkurranse_last_sync_time') || 'Aldri synkronisert';
     setApiSettings({ apiKey: storedApiKey, lastSync: storedLastSync });
 
+    // Hent offisielle resultater fra Netlify Blobs for alle brukere
+    const fetchGlobalResults = async () => {
+      try {
+        const response = await fetch('/.netlify/functions/get-official-results');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.actualResults) setActualResults(data.actualResults);
+          if (data.actualPlayoffs) setActualPlayoffs(data.actualPlayoffs);
+        }
+      } catch (e) {
+        console.warn("Kunne ikke hente globale resultater fra Netlify Blobs.", e);
+      }
+    };
+
     // Fetch initial list of submitted coupons from Netlify Database API
     fetchSubmittedCoupons();
+    fetchGlobalResults();
   }, []);
 
   // Sync draft to local storage on modification
@@ -378,6 +383,38 @@ export default function App() {
         fetchResultsFromApi(apiSettings.apiKey, todayStr);
       }
     };
+
+    const publishResultsToNetlify = async () => {
+    if (!adminSecret.trim()) {
+      showNotification("Legg inn admin-passord (ADMIN_SECRET) under innstillinger først!", "error");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/.netlify/functions/save-official-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actualResults,
+          actualPlayoffs,
+          adminSecret: adminSecret.trim()
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) throw new Error("Feil admin-passord!");
+        throw new Error("Kunne ikke lagre til skyen.");
+      }
+
+      showNotification("Suksess! Resultatene er publisert live for alle deltakere.", "success");
+    } catch (e) {
+      console.error(e);
+      showNotification(`Publisering feilet: ${e.message}`, "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
     // Run scheduler checks on load and then every 30 minutes
     runDailySchedulerCheck();
@@ -1619,28 +1656,48 @@ export default function App() {
     setIsSyncing(true);
 
     try {
-      // API-FOOTBALL v3 League ID for World Cup is 1, season is 2026
-      const url = `https://v3.football.api-sports.io/fixtures?league=1&season=2026`;
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'x-apisports-key': apiKey
+      // 1. Generate the 3-day window allowed by the Free Plan (yesterday, today, tomorrow)
+      const datesToFetch = forcedTodayStr ? [forcedTodayStr] : (() => {
+        const today = new Date();
+        const yesterday = new Date(); yesterday.setDate(today.getDate() - 1);
+        const tomorrow = new Date(); tomorrow.setDate(today.getDate() + 1);
+        return [
+          yesterday.toISOString().split('T')[0],
+          today.toISOString().split('T')[0],
+          tomorrow.toISOString().split('T')[0]
+        ];
+      })();
+
+      // 2. Fetch all dates in parallel to stay within free plan parameters
+      const fetchPromises = datesToFetch.map(date =>
+        fetch(`https://v3.football.api-sports.io/fixtures?date=${date}`, {
+          method: 'GET',
+          headers: {
+            'x-apisports-key': apiKey
+          }
+        }).then(res => {
+          if (!res.ok) throw new Error(`Kunne ikke hente data for ${date}`);
+          return res.json();
+        })
+      );
+
+      const responses = await Promise.all(fetchPromises);
+      
+      // 3. Combine responses and filter down to the World Cup (League ID 1)
+      let combinedFixtures = [];
+      responses.forEach(data => {
+        if (data.errors && Object.keys(data.errors).length > 0) {
+          throw new Error(Object.values(data.errors)[0] || "Ukjent feil fra API");
+        }
+        if (data.response) {
+          combinedFixtures = [...combinedFixtures, ...data.response];
         }
       });
 
-      if (!response.ok) {
-        throw new Error("Tilkobling til API-FOOTBALL feilet. Sjekk nøkkelen din.");
-      }
+      const fixtures = combinedFixtures.filter(f => f.league.id === 1);
 
-      const data = await response.json();
-
-      if (data.errors && Object.keys(data.errors).length > 0) {
-        throw new Error(Object.values(data.errors)[0] || "Ukjent feil fra API");
-      }
-
-      const fixtures = data.response || [];
       if (fixtures.length === 0) {
-        showNotification("Ingen offisielle kamper funnet for sesongen 2026 i API-et.", "info");
+        showNotification(`Ingen spilte eller aktive VM-kamper funnet i 3-dagersvinduet.`, "info");
         return;
       }
 
@@ -1710,28 +1767,76 @@ export default function App() {
         }
       });
 
-      setActualPlayoffs(prev => ({
-        ...prev,
-        ...(apiR16.length > 0 && { r16: apiR16 }),
-        ...(apiR8.length > 0 && { r8: apiR8 }),
-        ...(apiR4.length > 0 && { r4: apiR4 }),
-        ...(apiR2.length > 0 && { r2: apiR2 }),
-        ...(apiWinner && { winner: apiWinner })
-      }));
+      setActualPlayoffs(prev => {
+        const nextR16 = [...(prev.r16 || [])];
+        apiR16.forEach(t => { if (!nextR16.includes(t)) nextR16.push(t); });
+
+        const nextR8 = [...(prev.r8 || [])];
+        apiR8.forEach(t => { if (!nextR8.includes(t)) nextR8.push(t); });
+
+        const nextR4 = [...(prev.r4 || [])];
+        apiR4.forEach(t => { if (!nextR4.includes(t)) nextR4.push(t); });
+
+        const nextR2 = [...(prev.r2 || [])];
+        apiR2.forEach(t => { if (!nextR2.includes(t)) nextR2.push(t); });
+
+        return {
+          ...prev,
+          r16: nextR16,
+          r8: nextR8,
+          r4: nextR4,
+          r2: nextR2,
+          winner: apiWinner || prev.winner
+        };
+      });
 
       // Record Sync Timestamps
       const now = new Date();
       const timeStr = now.toLocaleDateString('no-NO') + ' kl. ' + now.toLocaleTimeString('no-NO', { hour: '2-digit', minute: '2-digit' });
-      const todayStr = forcedTodayStr || now.toISOString().split('T')[0];
-
+      
       localStorage.setItem('tippekonkurranse_last_sync_time', timeStr);
-      localStorage.setItem('tippekonkurranse_last_sync_date', todayStr);
+      if (forcedTodayStr) {
+        localStorage.setItem('tippekonkurranse_last_sync_date', forcedTodayStr);
+      }
       setApiSettings(prev => ({ ...prev, lastSync: timeStr }));
 
-      showNotification("Synkronisering fullført! Kampresultatene ble oppdatert.", "success");
+      showNotification(`Synkronisering fullført for kampvinduet!`, "success");
     } catch (err) {
       console.error("API Error: ", err);
       showNotification(`Synkronisering feilet: ${err.message}`, "error");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // publishResultsToNetlify (LIM INN DENNE FUNKSJONEN HER):
+  const publishResultsToNetlify = async () => {
+    if (!adminSecret.trim()) {
+      showNotification("Legg inn admin-passord (ADMIN_SECRET) under innstillinger først!", "error");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/.netlify/functions/save-official-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actualResults,
+          actualPlayoffs,
+          adminSecret: adminSecret.trim()
+        })
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) throw new Error("Feil admin-passord!");
+        throw new Error("Kunne ikke lagre til skyen.");
+      }
+
+      showNotification("Suksess! Resultatene er publisert live for alle deltakere.", "success");
+    } catch (e) {
+      console.error(e);
+      showNotification(`Publisering feilet: ${e.message}`, "error");
     } finally {
       setIsSyncing(false);
     }
@@ -2571,12 +2676,12 @@ export default function App() {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                   <div className="flex items-center gap-2.5">
                     <div className="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
-                      <Globe className="w-4 h-4 animate-spin-slow" />
+                      <Globe className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-200">API-FOOTBALL Tilkobling</h4>
+                      <h4 className="text-xs font-bold text-slate-200">API-FOOTBALL Tilkobling &amp; Admin-panel</h4>
                       <p className="text-[10px] text-slate-450">
-                        Resultater synkroniseres automatisk hver dag kl. <span className="text-emerald-400 font-bold">10:00 CEST</span>.
+                        Synkroniser portalen med offisielle data og publiser til deltakerne.
                       </p>
                     </div>
                   </div>
@@ -2590,42 +2695,74 @@ export default function App() {
                     <button
                       onClick={() => fetchResultsFromApi()}
                       disabled={isSyncing}
-                      className="flex-1 sm:flex-none py-1.5 px-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-[11px] font-black rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-md"
+                      className="flex-1 sm:flex-none py-1.5 px-4 bg-slate-800 hover:bg-slate-750 disabled:opacity-50 text-white text-[11px] font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                      {isSyncing ? 'Synkroniserer...' : 'Synkroniser nå'}
+                      {isSyncing ? 'Synkroniserer...' : 'Hent fra API'}
+                    </button>
+                    <button
+                      onClick={() => typeof publishResultsToNetlify === 'function' ? publishResultsToNetlify() : alert('Du må legge til publishResultsToNetlify-funksjonen i koden først!')}
+                      disabled={isSyncing}
+                      className="flex-1 sm:flex-none py-1.5 px-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-[11px] font-black rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-md"
+                    >
+                      <CloudLightning className="w-3.5 h-3.5" /> Publiser Live
                     </button>
                   </div>
                 </div>
 
-                {/* Expanded API Settings Panel */}
+                {/* Expanded API & Admin Settings Panel */}
                 {isSettingsOpen && (
-                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-3">
-                    <div className="text-xs space-y-1">
-                      <label className="font-bold text-slate-300 block">API-Sports API-nøkkel (v3.football)</label>
-                      <span className="text-[10px] text-slate-500 block">Du kan hente API-nøkkelen din direkte fra dashbordet på api-football.com</span>
+                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-4">
+                    <div className="space-y-3">
+                      <div className="text-xs space-y-1">
+                        <label className="font-bold text-slate-300 block">API-Sports API-nøkkel (v3.football)</label>
+                        <span className="text-[10px] text-slate-500 block">Brukt til å hente live-resultater fra kilde-API.</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="Skriv inn x-apisports-key..."
+                          defaultValue={apiSettings.apiKey}
+                          id="api_key_input"
+                          className="flex-1 bg-slate-900 border border-slate-805 rounded-lg py-1.5 px-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
+                        />
+                        <button
+                          onClick={() => saveApiKey(document.getElementById('api_key_input').value)}
+                          className="py-1.5 px-4 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg transition-all"
+                        >
+                          Lagre API-nøkkel
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        placeholder="Skriv inn x-apisports-key..."
-                        defaultValue={apiSettings.apiKey}
-                        id="api_key_input"
-                        className="flex-1 bg-slate-900 border border-slate-805 rounded-lg py-1.5 px-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
-                      />
-                      <button
-                        onClick={() => saveApiKey(document.getElementById('api_key_input').value)}
-                        className="py-1.5 px-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold rounded-lg transition-all"
-                      >
-                        Lagre
-                      </button>
+
+                    <div className="space-y-3 pt-2 border-t border-slate-900">
+                      <div className="text-xs space-y-1">
+                        <label className="font-bold text-slate-300 block">Admin Portalnøkkel (ADMIN_SECRET)</label>
+                        <span className="text-[10px] text-slate-500 block">Må matche variabelen du la inn i Netlify for å få lov til å lagre live-tabellen.</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="password"
+                          placeholder="Skriv inn din ADMIN_SECRET..."
+                          value={typeof adminSecret !== 'undefined' ? adminSecret : ''}
+                          onChange={(e) => {
+                            if (typeof setAdminSecret === 'function') {
+                              setAdminSecret(e.target.value);
+                              localStorage.setItem('tippekonkurranse_admin_secret', e.target.value);
+                            } else {
+                              alert('Du må legge til adminSecret-staten øverst i App.jsx først!');
+                            }
+                          }}
+                          className="flex-1 bg-slate-900 border border-slate-805 rounded-lg py-1.5 px-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
 
                 <div className="text-[10px] text-slate-500 flex flex-wrap gap-4 pt-1 border-t border-slate-850">
-                  <span><strong>Siste oppdatering:</strong> {apiSettings.lastSync}</span>
-                  <span><strong>Status:</strong> {apiSettings.apiKey ? 'Nøkkel konfigurert' : 'Nøkkel mangler'}</span>
+                  <span><strong>Siste synkronisering mot nettleser:</strong> {apiSettings.lastSync}</span>
+                  <span><strong>Status:</strong> {apiSettings.apiKey ? 'API-nøkkel klar' : 'API-nøkkel mangler'} · {typeof adminSecret !== 'undefined' && adminSecret ? 'Admin-nøkkel lagret' : 'Admin-nøkkel mangler'}</span>
                 </div>
               </div>
 
@@ -2718,7 +2855,7 @@ export default function App() {
                             onClick={() => startEditingScore(m.id, result?.homeScore, result?.awayScore)}
                             className="bg-slate-900/60 p-2.5 rounded-lg border border-slate-900 hover:border-slate-800 hover:bg-slate-900 transition-all space-y-2 cursor-pointer group"
                           >
-                            <div className="flex items-center justify-between text-[9px] text-slate-550">
+                            <div className="flex items-center justify-between text-[9px] text-slate-555">
                               <span>{m.date}</span>
                               {isPlayed ? (
                                 <span className="text-[9px] font-black text-emerald-400 bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/40 flex items-center gap-1.5">
