@@ -253,8 +253,9 @@ export default function App() {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isGeneratingClassicPdf, setIsGeneratingClassicPdf] = useState(false);
   const [isSavingToCloud, setIsSavingToCloud] = useState(false);
+  const [selectedCoupon, setSelectedCoupon] = useState(null);
 
-// Match results database - initialized empty so it only shows what is fetched or edited
+  // Match results database - initialized empty so it only shows what is fetched or edited
   const [actualResults, setActualResults] = useState({});
 
   // Playoff state sub-tab for results
@@ -275,7 +276,7 @@ export default function App() {
   const [tempAwayScore, setTempAwayScore] = useState(0);
   const [pointsSearchQuery, setPointsSearchQuery] = useState('');
 
-// API-FOOTBALL Integration states
+  // API-FOOTBALL Integration states
   const [apiSettings, setApiSettings] = useState({
     apiKey: '',
     lastSync: 'Aldri synkronisert'
@@ -384,38 +385,6 @@ export default function App() {
       }
     };
 
-    const publishResultsToNetlify = async () => {
-    if (!adminSecret.trim()) {
-      showNotification("Legg inn admin-passord (ADMIN_SECRET) under innstillinger først!", "error");
-      return;
-    }
-
-    setIsSyncing(true);
-    try {
-      const response = await fetch('/.netlify/functions/save-official-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          actualResults,
-          actualPlayoffs,
-          adminSecret: adminSecret.trim()
-        })
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) throw new Error("Feil admin-passord!");
-        throw new Error("Kunne ikke lagre til skyen.");
-      }
-
-      showNotification("Suksess! Resultatene er publisert live for alle deltakere.", "success");
-    } catch (e) {
-      console.error(e);
-      showNotification(`Publisering feilet: ${e.message}`, "error");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
     // Run scheduler checks on load and then every 30 minutes
     runDailySchedulerCheck();
     const interval = setInterval(runDailySchedulerCheck, 1800000); 
@@ -428,10 +397,17 @@ export default function App() {
       const response = await fetch('/.netlify/functions/get-coupons');
       if (response.ok) {
         const list = await response.json();
-        setParticipants(list || []);
+        if (list && list.length > 0) {
+          setParticipants(list);
+        } else {
+          setParticipants([]);
+        }
+      } else {
+        setParticipants([]);
       }
     } catch (e) {
       console.warn("Could not retrieve coupons from Netlify. Local preview state will be preserved.", e);
+      setParticipants([]);
     }
   };
 
@@ -1375,7 +1351,7 @@ export default function App() {
       let ry = 227;
       doc.text("* INNSATS PR PERSON: 200,- ALL INNSATS GÅR TIL PREMIE", 15, ry);
       doc.text("* DET ER INGEN BEGRENSNINGER PÅ ANTALL TILLATTE KUPONGER PR PERSON", 15, ry + 2.6);
-      doc.text("* INNLEVERINGSFRIST: 11. JUNI KL. 21.00 (ETTER DETTE TAS IKKE SKJEMA IMOT)", 15, ry + 5.2);
+      doc.text("* INNLEVERINGSFRIST: 11. JUNI KL. 21.00 (ETTER DETCE TAS IKKE SKJEMA IMOT)", 15, ry + 5.2);
       doc.text("* SKJEMA KAN OVERLEVERES DOMMEREN PERSONLIG ELLER SENDES PR E-POST", 15, ry + 7.8);
       doc.text("* BÅDE SKJEMA OG PENGER MÅ LEVERES FØR FRISTEN", 15, ry + 10.4);
 
@@ -1809,7 +1785,7 @@ export default function App() {
     }
   };
 
-  // publishResultsToNetlify (LIM INN DENNE FUNKSJONEN HER):
+  // publishResultsToNetlify:
   const publishResultsToNetlify = async () => {
     if (!adminSecret.trim()) {
       showNotification("Legg inn admin-passord (ADMIN_SECRET) under innstillinger først!", "error");
@@ -1927,7 +1903,7 @@ export default function App() {
               </span>
             </div>
             <div className="h-4 w-px bg-slate-800 hidden sm:block" />
-            <span className="flex items-center gap-1 text-teal-400 bg-teal-950/30 px-2 py-0.5 rounded border border-teal-900/50">
+            <span className="flex items-center gap-1 text-teal-400 bg-teal-955/30 px-2 py-0.5 rounded border border-teal-900/50">
               <CloudLightning className="w-3.5 h-3.5" /> Netlify-Tilkoblet
             </span>
           </div>
@@ -2070,7 +2046,7 @@ export default function App() {
                   <div className="px-5 py-4 bg-slate-900/60 border-b border-slate-800 flex items-center justify-between">
                     <div>
                       <h3 className="font-extrabold text-white text-sm tracking-wide">Kamper i Gruppe {activeGroup}</h3>
-                      <p className="text-[11px] text-slate-500">Velg resultat for å oppdatere tabellen</p>
+                      <p className="text-[11px] text-slate-550">Velg resultat for å oppdatere tabellen</p>
                     </div>
                     <button
                       onClick={() => clearGroupPredictions(activeGroup)}
@@ -2145,7 +2121,7 @@ export default function App() {
 
               {/* Dynamic Simulated Standings Table */}
               <div className="lg:col-span-5 space-y-4">
-                <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+                <div className="bg-slate-950 rounded-2xl border border-slate-805 shadow-xl overflow-hidden">
                   <div className="px-5 py-4 bg-slate-900/60 border-b border-slate-800">
                     <h3 className="font-extrabold text-white text-sm tracking-wide">Simulert Tabell: Gruppe {activeGroup}</h3>
                   </div>
@@ -2194,7 +2170,7 @@ export default function App() {
                       <h4 className="font-extrabold text-white text-xs uppercase tracking-wider">De 8 beste treerne</h4>
                       <p className="text-[9px] text-slate-400">VM 2026: Topp 8 av de 12 treerne går videre</p>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-900">
+                    <span className="text-[10px] font-bold text-emerald-400 bg-emerald-955/40 px-2 py-0.5 rounded border border-emerald-900">
                       Live Rangering
                     </span>
                   </div>
@@ -2207,7 +2183,7 @@ export default function App() {
                           key={third.group} 
                           className={`flex items-center justify-between px-3 py-1.5 rounded-lg border text-xs transition-all ${
                             isAdvancing 
-                              ? 'bg-emerald-950/10 border-emerald-950/60 text-emerald-200' 
+                              ? 'bg-emerald-950/10 border-emerald-955/60 text-emerald-200' 
                               : 'bg-slate-900/20 border-slate-800 text-slate-500'
                           }`}
                         >
@@ -2277,7 +2253,7 @@ export default function App() {
             </div>
 
             {/* Complete Grid List for all 72 Matches */}
-            <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
+            <div className="bg-slate-955 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
               <div className="px-6 py-4.5 bg-slate-900/50 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="font-extrabold text-base text-white">Alle 72 gruppespillskamper</h3>
@@ -2301,7 +2277,7 @@ export default function App() {
                         const pred = predictions[m.id];
                         return (
                           <div key={m.id} className="bg-slate-950 p-2.5 rounded-lg border border-slate-900 hover:border-slate-800/85 transition-all space-y-2">
-                            <div className="flex items-center justify-between text-[9px] text-slate-500">
+                            <div className="flex items-center justify-between text-[9px] text-slate-550">
                               <span>{m.date}</span>
                               <span className="font-mono text-slate-600">#{m.id}</span>
                             </div>
@@ -2379,7 +2355,7 @@ export default function App() {
                         className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
                           isSelected 
                             ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-950 shadow-md scale-105' 
-                            : 'bg-slate-900/60 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
+                            : 'bg-slate-900/60 border-slate-855 text-slate-400 hover:text-white hover:bg-slate-800'
                         }`}
                       >
                         {team}
@@ -2403,7 +2379,7 @@ export default function App() {
 
                 <div className="flex flex-wrap gap-1.5 p-3.5 bg-slate-900/20 rounded-xl border border-slate-800/60">
                   {r32.length === 0 ? (
-                    <span className="text-[11px] text-slate-500 italic">Vennligst velg lag i 16-delsfinalen først.</span>
+                    <span className="text-[11px] text-slate-550 italic">Vennligst velg lag i 16-delsfinalen først.</span>
                   ) : (
                     r32.map(team => {
                       const isSelected = r16.includes(team);
@@ -2431,7 +2407,7 @@ export default function App() {
                 <div className="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
                   <div>
                     <h4 className="font-bold text-white text-xs uppercase tracking-wider">3. Kvartfinalister (8 lag)</h4>
-                    <p className="text-[11px] text-slate-400">Velg de 8 lagene som tar seg videre til kvartfinale (3 poeng pr riktig)</p>
+                    <p className="text-[11px] text-slate-400">Velg de 8 lagene som faktisk kom seg til kvartfinale (3 poeng pr riktig)</p>
                   </div>
                   <span className={`text-xs font-black px-2.5 py-1 rounded-md ${r8.length === 8 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-900' : 'bg-amber-500/20 text-amber-400 border border-amber-900'}`}>
                     {r8.length}/8
@@ -2440,7 +2416,7 @@ export default function App() {
 
                 <div className="flex flex-wrap gap-1.5 p-3.5 bg-slate-900/20 rounded-xl border border-slate-800/60">
                   {r16.length === 0 ? (
-                    <span className="text-[11px] text-slate-500 italic">Vennligst velg lag i 8-delsfinalen først.</span>
+                    <span className="text-[11px] text-slate-550 italic">Vennligst velg lag i 8-delsfinalen først.</span>
                   ) : (
                     r16.map(team => {
                       const isSelected = r8.includes(team);
@@ -2516,7 +2492,7 @@ export default function App() {
 
                   <div className="flex flex-wrap gap-1.5 p-3.5 bg-slate-900/20 rounded-xl border border-slate-800/60">
                     {r4.length === 0 ? (
-                      <span className="text-[11px] text-slate-550 italic">Vennligst velg lag i semifinalen først.</span>
+                      <span className="text-[11px] text-slate-555 italic">Vennligst velg lag i semifinalen først.</span>
                     ) : (
                       r4.map(team => {
                         const isSelected = r2.includes(team);
@@ -2527,7 +2503,7 @@ export default function App() {
                             onClick={() => toggleKnockoutTeam(team, r2, handleR2Change, 2)}
                             className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
                               isSelected 
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-950 shadow-md scale-105' 
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-955 shadow-md scale-105' 
                                 : 'bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
                             }`}
                           >
@@ -2590,7 +2566,7 @@ export default function App() {
             </div>
 
             {/* SYNC & SUBMISSION CONTROL AREA */}
-            <div className="bg-slate-950 p-6 rounded-2xl border border-slate-850 shadow-2xl space-y-4">
+            <div className="bg-slate-955 p-6 rounded-2xl border border-slate-855 shadow-2xl space-y-4">
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <div className="space-y-1">
                   <h3 className="font-extrabold text-sm text-white flex items-center gap-1.5">
@@ -2688,7 +2664,7 @@ export default function App() {
                   <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     <button
                       onClick={() => setIsSettingsOpen(!isSettingsOpen)}
-                      className="flex-1 sm:flex-none py-1.5 px-3.5 bg-slate-950 hover:bg-slate-850 border border-slate-800 text-[11px] text-slate-300 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all"
+                      className="flex-1 sm:flex-none py-1.5 px-3.5 bg-slate-955 hover:bg-slate-855 border border-slate-800 text-[11px] text-slate-300 font-bold rounded-lg flex items-center justify-center gap-1.5 transition-all"
                     >
                       <Settings className="w-3.5 h-3.5" /> Innstillinger
                     </button>
@@ -2701,7 +2677,7 @@ export default function App() {
                       {isSyncing ? 'Synkroniserer...' : 'Hent fra API'}
                     </button>
                     <button
-                      onClick={() => typeof publishResultsToNetlify === 'function' ? publishResultsToNetlify() : alert('Du må legge til publishResultsToNetlify-funksjonen i koden først!')}
+                      onClick={() => publishResultsToNetlify()}
                       disabled={isSyncing}
                       className="flex-1 sm:flex-none py-1.5 px-4 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-[11px] font-black rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-md"
                     >
@@ -2716,7 +2692,7 @@ export default function App() {
                     <div className="space-y-3">
                       <div className="text-xs space-y-1">
                         <label className="font-bold text-slate-300 block">API-Sports API-nøkkel (v3.football)</label>
-                        <span className="text-[10px] text-slate-500 block">Brukt til å hente live-resultater fra kilde-API.</span>
+                        <span className="text-[10px] text-slate-550 block">Brukt til å hente live-resultater fra kilde-API.</span>
                       </div>
                       <div className="flex gap-2">
                         <input
@@ -2738,20 +2714,16 @@ export default function App() {
                     <div className="space-y-3 pt-2 border-t border-slate-900">
                       <div className="text-xs space-y-1">
                         <label className="font-bold text-slate-300 block">Admin Portalnøkkel (ADMIN_SECRET)</label>
-                        <span className="text-[10px] text-slate-500 block">Må matche variabelen du la inn i Netlify for å få lov til å lagre live-tabellen.</span>
+                        <span className="text-[10px] text-slate-550 block">Må matche variabelen du la inn i Netlify for å få lov til å lagre live-tabellen.</span>
                       </div>
                       <div className="flex gap-2">
                         <input
                           type="password"
                           placeholder="Skriv inn din ADMIN_SECRET..."
-                          value={typeof adminSecret !== 'undefined' ? adminSecret : ''}
+                          value={adminSecret}
                           onChange={(e) => {
-                            if (typeof setAdminSecret === 'function') {
-                              setAdminSecret(e.target.value);
-                              localStorage.setItem('tippekonkurranse_admin_secret', e.target.value);
-                            } else {
-                              alert('Du må legge til adminSecret-staten øverst i App.jsx først!');
-                            }
+                            setAdminSecret(e.target.value);
+                            localStorage.setItem('tippekonkurranse_admin_secret', e.target.value);
                           }}
                           className="flex-1 bg-slate-900 border border-slate-805 rounded-lg py-1.5 px-3 text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs font-mono"
                         />
@@ -2760,9 +2732,9 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="text-[10px] text-slate-500 flex flex-wrap gap-4 pt-1 border-t border-slate-850">
+                <div className="text-[10px] text-slate-555 flex flex-wrap gap-4 pt-1 border-t border-slate-855">
                   <span><strong>Siste synkronisering mot nettleser:</strong> {apiSettings.lastSync}</span>
-                  <span><strong>Status:</strong> {apiSettings.apiKey ? 'API-nøkkel klar' : 'API-nøkkel mangler'} · {typeof adminSecret !== 'undefined' && adminSecret ? 'Admin-nøkkel lagret' : 'Admin-nøkkel mangler'}</span>
+                  <span><strong>Status:</strong> {apiSettings.apiKey ? 'API-nøkkel klar' : 'API-nøkkel mangler'} · {adminSecret ? 'Admin-nøkkel lagret' : 'Admin-nøkkel mangler'}</span>
                 </div>
               </div>
 
@@ -2786,7 +2758,7 @@ export default function App() {
               {resultsSubTab === 'groups' && editingMatchId && (
                 <div className="p-4 bg-slate-900 rounded-xl border border-emerald-500/30 flex flex-col md:flex-row items-center justify-between gap-4 transition-all">
                   <div className="text-xs">
-                    <span className="text-slate-500 uppercase tracking-widest block text-[9px] font-bold">Redigerer kamp #{editingMatchId}</span>
+                    <span className="text-slate-550 uppercase tracking-widest block text-[9px] font-bold">Redigerer kamp #{editingMatchId}</span>
                     <span className="font-bold text-white text-sm">
                       {GROUPS_DATA[editingMatchId[0]].matches.find(m => m.id === editingMatchId)?.home} vs {GROUPS_DATA[editingMatchId[0]].matches.find(m => m.id === editingMatchId)?.away}
                     </span>
@@ -2800,7 +2772,7 @@ export default function App() {
                       onChange={(e) => setTempHomeScore(e.target.value)}
                       className="w-12 bg-slate-950 border border-slate-700 text-center text-sm font-black text-white rounded-lg py-1 focus:ring-2 focus:ring-emerald-500 outline-none"
                     />
-                    <span className="text-xs text-slate-500 font-bold">-</span>
+                    <span className="text-xs text-slate-550 font-bold">-</span>
                     <input
                       type="number"
                       min="0"
@@ -2839,7 +2811,7 @@ export default function App() {
               <div className="p-0 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {Object.entries(GROUPS_DATA).map(([groupLetter, group]) => (
                   <div key={groupLetter} className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-850 pb-2">
+                    <div className="flex items-center justify-between border-b border-slate-855 pb-2">
                       <span className="font-black text-xs text-emerald-400 uppercase tracking-widest">Gruppe {groupLetter}</span>
                       <span className="text-[10px] text-slate-550 font-bold">6 kamper</span>
                     </div>
@@ -2875,7 +2847,7 @@ export default function App() {
                               </span>
                               
                               {isPlayed ? (
-                                <div className="flex items-center gap-2 bg-slate-950 px-3 py-1 rounded-md border border-slate-800 shadow-inner">
+                                <div className="flex items-center gap-2 bg-slate-955 px-3 py-1 rounded-md border border-slate-800 shadow-inner">
                                   <span className="text-xs font-black text-white">{result.homeScore}</span>
                                   <span className="text-[9px] text-slate-600 font-normal">-</span>
                                   <span className="text-xs font-black text-white">{result.awayScore}</span>
@@ -2901,7 +2873,7 @@ export default function App() {
 
             {/* CONTENT VIEW FOR PLAYOFFS */}
             {resultsSubTab === 'playoffs' && (
-              <div className="bg-slate-950 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
+              <div className="bg-slate-955/20 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-6">
                 
                 {/* 1. R32 (Automatically Computed) */}
                 <div className="space-y-3">
@@ -2933,7 +2905,7 @@ export default function App() {
                   <div className="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
                     <div>
                       <h4 className="font-bold text-white text-xs uppercase tracking-wider">2. Faktiske 8-delsfinalister (16 lag)</h4>
-                      <p className="text-[11px] text-slate-450">Velg de 16 lagene som faktisk kom seg til 8-delsfinalen</p>
+                      <p className="text-[11px] text-slate-455">Velg de 16 lagene som faktisk kom seg til 8-delsfinalen</p>
                     </div>
                     <span className={`text-xs font-black px-2.5 py-1 rounded-md ${(actualPlayoffs.r16 || []).length === 16 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-900' : 'bg-amber-500/20 text-amber-400 border border-amber-900'}`}>
                       {(actualPlayoffs.r16 || []).length}/16
@@ -2970,7 +2942,7 @@ export default function App() {
                   <div className="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
                     <div>
                       <h4 className="font-bold text-white text-xs uppercase tracking-wider">3. Faktiske Kvartfinalister (8 lag)</h4>
-                      <p className="text-[11px] text-slate-450">Velg de 8 lagene som faktisk nådde kvartfinalen</p>
+                      <p className="text-[11px] text-slate-455">Velg de 8 lagene som faktisk nådde kvartfinalen</p>
                     </div>
                     <span className={`text-xs font-black px-2.5 py-1 rounded-md ${(actualPlayoffs.r8 || []).length === 8 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-900' : 'bg-amber-500/20 text-amber-400 border border-amber-900'}`}>
                       {(actualPlayoffs.r8 || []).length}/8
@@ -2990,7 +2962,7 @@ export default function App() {
                             onClick={() => toggleActualKnockoutTeam(team, actualPlayoffs.r8 || [], handleActualR8Change, 8)}
                             className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
                               isSelected 
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-950 shadow-md scale-105' 
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-955 shadow-md scale-105' 
                                 : 'bg-slate-900 border-slate-805 text-slate-400 hover:text-white hover:bg-slate-800'
                             }`}
                           >
@@ -3007,7 +2979,7 @@ export default function App() {
                   <div className="flex justify-between items-center bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
                     <div>
                       <h4 className="font-bold text-white text-xs uppercase tracking-wider">4. Faktiske Semifinalister (4 lag)</h4>
-                      <p className="text-[11px] text-slate-450">Velg de 4 lagene som faktisk nådde semifinalen</p>
+                      <p className="text-[11px] text-slate-455">Velg de 4 lagene som faktisk nådde semifinalen</p>
                     </div>
                     <span className={`text-xs font-black px-2.5 py-1 rounded-md ${(actualPlayoffs.r4 || []).length === 4 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-900' : 'bg-amber-500/20 text-amber-400 border border-amber-900'}`}>
                       {(actualPlayoffs.r4 || []).length}/4
@@ -3027,7 +2999,7 @@ export default function App() {
                             onClick={() => toggleActualKnockoutTeam(team, actualPlayoffs.r4 || [], handleActualR4Change, 4)}
                             className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
                               isSelected 
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-950 shadow-md scale-105' 
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-955 shadow-md scale-105' 
                                 : 'bg-slate-900 border-slate-850 text-slate-400 hover:text-white hover:bg-slate-800'
                             }`}
                           >
@@ -3065,7 +3037,7 @@ export default function App() {
                               onClick={() => toggleActualKnockoutTeam(team, actualPlayoffs.r2 || [], handleActualR2Change, 2)}
                               className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
                                 isSelected 
-                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-950 shadow-md scale-105' 
+                                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 border-emerald-400 text-slate-955 shadow-md scale-105' 
                                   : 'bg-slate-900 border-slate-805 text-slate-400 hover:text-white hover:bg-slate-800'
                               }`}
                             >
@@ -3207,7 +3179,7 @@ export default function App() {
                     <span className="font-bold text-white">ca 50% av innsatsen</span>
                   </div>
                 </div>
-                <p className="text-[10px] text-slate-500 mt-2 italic">Ved poenglikhet vil plassering avgjøres ved loddtrekning.</p>
+                <p className="text-[10px] text-slate-550 mt-2 italic">Ved poenglikhet vil plassering avgjøres ved loddtrekning.</p>
               </div>
 
             </div>
@@ -3232,17 +3204,21 @@ export default function App() {
 
             {participants.length === 0 ? (
               <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl bg-slate-900/20">
-                <CloudLightning className="w-8 h-8 text-slate-650 mx-auto mb-2 animate-bounce" />
-                <p className="text-xs font-bold text-slate-450">Ingen innsendte kuponger tilgjengelig ennå</p>
+                <CloudLightning className="w-8 h-8 text-slate-655 mx-auto mb-2 animate-bounce" />
+                <p className="text-xs font-bold text-slate-455">Ingen innsendte kuponger tilgjengelig ennå</p>
                 <p className="text-[10px] text-slate-550 mt-1 max-w-xs mx-auto">Sørg for å koble opp Netlify serverless database-funksjonene i prosjektet ditt for å fylle denne listen.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {participants.map((p, index) => (
-                  <div key={p.id || index} className="bg-slate-900 p-4 rounded-xl border border-slate-850 space-y-3">
+                  <div 
+                    key={p.id || index} 
+                    onClick={() => setSelectedCoupon(p)}
+                    className="bg-slate-900 p-4 rounded-xl border border-slate-855 space-y-3 cursor-pointer hover:border-emerald-500/40 hover:bg-slate-900/80 transition-all group"
+                  >
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                      <span className="font-black text-xs text-white uppercase">{p.userName}</span>
-                      <span className="text-[10px] text-slate-550 font-bold">#{(p.userId || '').substring(0, 5)}</span>
+                      <span className="font-black text-xs text-white uppercase group-hover:text-emerald-400 transition-colors">{p.userName}</span>
+                      <span className="text-[10px] text-slate-555 font-bold">#{(p.userId || '').substring(0, 5)}</span>
                     </div>
                     <div className="space-y-1.5 text-xs text-slate-455">
                       <div className="flex justify-between">
@@ -3256,6 +3232,9 @@ export default function App() {
                       <div className="flex justify-between">
                         <span>Toppscorer:</span>
                         <span className="font-bold text-slate-200">{p.topscorer || 'Mangler'}</span>
+                      </div>
+                      <div className="pt-1 text-[10px] text-emerald-400 font-semibold flex items-center justify-end gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Vis hele kupongen <ChevronRight className="w-3 h-3 animate-pulse" />
                       </div>
                     </div>
                   </div>
@@ -3271,12 +3250,12 @@ export default function App() {
             
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 shadow-xl">
-                <div className="p-3 bg-emerald-950/40 text-emerald-400 rounded-xl border border-emerald-900/40">
+              <div className="bg-slate-955 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 shadow-xl">
+                <div className="p-3 bg-emerald-955/40 text-emerald-400 rounded-xl border border-emerald-900/40">
                   <Calendar className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-450 uppercase tracking-wider font-bold block">Spilte kamper</span>
+                  <span className="text-[10px] text-slate-455 uppercase tracking-wider font-bold block">Spilte kamper</span>
                   <span className="text-2xl font-black text-white">{playedMatchesCount} <span className="text-xs text-slate-500 font-normal">/ 72 spilt</span></span>
                 </div>
               </div>
@@ -3291,12 +3270,12 @@ export default function App() {
                   </span>
                 </div>
               </div>
-              <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 shadow-xl">
-                <div className="p-3 bg-blue-950/40 text-blue-400 rounded-xl border border-blue-900/40">
+              <div className="bg-slate-955 p-5 rounded-2xl border border-slate-800 flex items-center gap-4 shadow-xl">
+                <div className="p-3 bg-blue-955/40 text-blue-400 rounded-xl border border-blue-900/40">
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-450 uppercase tracking-wider font-bold block">Deltakere</span>
+                  <span className="text-[10px] text-slate-455 uppercase tracking-wider font-bold block">Deltakere</span>
                   <span className="text-2xl font-black text-white">{sortedScores.length} <span className="text-xs text-slate-500 font-normal">aktive</span></span>
                 </div>
               </div>
@@ -3304,7 +3283,7 @@ export default function App() {
 
             {/* Scoreboard table card */}
             <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-              <div className="px-5 py-4.5 bg-slate-900/50 border-b border-slate-850 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="px-5 py-4.5 bg-slate-900/50 border-b border-slate-855 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
                   <h3 className="font-extrabold text-base text-white flex items-center gap-2">
                     <Award className="w-5 h-5 text-emerald-400" /> Resultattabell &amp; poengberegning
@@ -3319,7 +3298,7 @@ export default function App() {
                     placeholder="Søk på deltaker..."
                     value={pointsSearchQuery}
                     onChange={(e) => setPointsSearchQuery(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 pl-3 pr-8 text-slate-200 placeholder-slate-550 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs"
+                    className="w-full bg-slate-900 border border-slate-800 rounded-lg py-1.5 pl-3 pr-8 text-slate-200 placeholder-slate-555 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs"
                   />
                   <span className="absolute right-2.5 top-2 text-slate-500 font-bold text-xs pointer-events-none">🔍</span>
                 </div>
@@ -3353,7 +3332,7 @@ export default function App() {
                           <tr 
                             key={row.id || idx}
                             className={`hover:bg-slate-900/30 transition-all ${
-                              row.isDraft ? 'bg-emerald-950/10 border-l-2 border-l-emerald-500' : ''
+                              row.isDraft ? 'bg-emerald-955/10 border-l-2 border-l-emerald-500' : ''
                             }`}
                           >
                             {/* RANKING POSITION */}
@@ -3378,7 +3357,7 @@ export default function App() {
                                     </span>
                                   )}
                                 </span>
-                                <span className="text-[10px] text-slate-500">
+                                <span className="text-[10px] text-slate-550">
                                   {row.userPhone ? `Tlf: ${row.userPhone}` : 'Telefon uoppgitt'}
                                 </span>
                               </div>
@@ -3412,7 +3391,7 @@ export default function App() {
               </div>
 
               {/* Explanatory footer */}
-              <div className="p-4.5 bg-slate-900/20 border-t border-slate-850 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-[11px] text-slate-400">
+              <div className="p-4.5 bg-slate-900/20 border-t border-slate-855 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-[11px] text-slate-400">
                 <div className="flex items-center gap-2">
                   <Info className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
@@ -3432,11 +3411,238 @@ export default function App() {
       </main>
 
       {/* FOOTER */}
-      <footer className="bg-slate-950 border-t border-slate-800 mt-12 py-8 text-center text-xs text-slate-500">
+      <footer className="bg-slate-955 border-t border-slate-800 mt-12 py-8 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 space-y-2">
           <p>Utviklet som interaktiv prototype. Tar høyde for feil og mangler. Om noe feiler, gi beskjed til Tore. </p>
         </div>
       </footer>
+
+      {/* POPUP MODAL FOR VIEWING COUPON DETAILS */}
+      {selectedCoupon && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[85vh] overflow-y-auto shadow-2xl flex flex-col selection:bg-emerald-500 selection:text-white">
+            
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-955 sticky top-0 z-10">
+              <div>
+                <h3 className="font-extrabold text-base text-white uppercase tracking-wide flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-amber-400" /> Kupongdetaljer: {selectedCoupon.userName}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {selectedCoupon.userPhone ? `Telefon: ${selectedCoupon.userPhone}` : 'Telefon uoppgitt'} · Signatur: {(selectedCoupon.userId || '').substring(0, 8)}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedCoupon(null)}
+                className="py-1.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg transition-all hover:text-white"
+              >
+                Lukk
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-6 overflow-y-auto">
+              
+              {/* Group Matches Section */}
+              <div className="space-y-3">
+                <h4 className="font-black text-xs text-emerald-400 uppercase tracking-widest border-b border-slate-800 pb-1.5 flex items-center gap-1.5">
+                  <List className="w-4 h-4" /> Gruppespillstips (72 Kamper)
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Object.entries(GROUPS_DATA).map(([groupLetter, group]) => (
+                    <div key={groupLetter} className="bg-slate-955/60 p-3 rounded-xl border border-slate-855 space-y-2">
+                      <div className="flex justify-between items-center border-b border-slate-900 pb-1">
+                        <span className="font-black text-[11px] text-slate-400 uppercase tracking-widest">
+                          Gruppe {groupLetter}
+                        </span>
+                        <div className="flex gap-2 text-[9px] font-bold text-slate-500 uppercase tracking-wider pr-1">
+                          <span className="w-6 text-center">TIP</span>
+                          <span className="w-6 text-center">RES</span>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        {group.matches.map(m => {
+                          const pred = selectedCoupon.predictions?.[m.id];
+                          const actualRes = actualResults[m.id];
+                          
+                          // Compute outcome 'H', 'U', 'B', or '—'
+                          let outcome = '—';
+                          if (actualRes && actualRes.played) {
+                            if (actualRes.homeScore > actualRes.awayScore) outcome = 'H';
+                            else if (actualRes.homeScore < actualRes.awayScore) outcome = 'B';
+                            else outcome = 'U';
+                          }
+
+                          return (
+                            <div key={m.id} className="flex items-center justify-between text-[11px] bg-slate-900/40 p-2 rounded-lg border border-slate-900/60">
+                              <div className="truncate max-w-[62%] text-slate-300">
+                                <span className="font-medium text-xs">{m.home} - {m.away}</span>
+                              </div>
+                              
+                              <div className="flex items-center gap-2 shrink-0">
+                                {/* TIP badge: User prediction guess */}
+                                <span className={`w-6 h-5 rounded flex items-center justify-center font-black text-[10px] ${
+                                  pred 
+                                    ? pred === 'U' ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-slate-950' 
+                                    : 'bg-slate-800 text-slate-655'
+                                }`}>
+                                  {pred || '—'}
+                                </span>
+
+                                {/* RES badge: Actual outcome */}
+                                <span 
+                                  title={actualRes && actualRes.played ? `Faktisk score: ${actualRes.homeScore}-${actualRes.awayScore}` : 'Ikke spilt'}
+                                  className={`w-6 h-5 rounded flex items-center justify-center font-black text-[10px] ${
+                                    outcome !== '—'
+                                      ? outcome === 'U' ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500 text-slate-950' 
+                                      : 'bg-slate-850 text-slate-600 border border-slate-800/80'
+                                  }`}
+                                >
+                                  {outcome}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Playoff Progression Section */}
+              {(() => {
+                const actualR32 = getActualR32Teams();
+                const isR32Undetermined = actualR32.length === 0;
+                const isR16Undetermined = (actualPlayoffs.r16 || []).length === 0;
+                const isR8Undetermined = (actualPlayoffs.r8 || []).length === 0;
+                const isR4Undetermined = (actualPlayoffs.r4 || []).length === 0;
+                const isR2Undetermined = (actualPlayoffs.r2 || []).length === 0;
+
+                const sortedR32 = selectedCoupon.r32 ? [...selectedCoupon.r32].sort((a, b) => a.localeCompare(b, 'no-NO')) : [];
+                const sortedR16 = selectedCoupon.r16 ? [...selectedCoupon.r16].sort((a, b) => a.localeCompare(b, 'no-NO')) : [];
+                const sortedR8 = selectedCoupon.r8 ? [...selectedCoupon.r8].sort((a, b) => a.localeCompare(b, 'no-NO')) : [];
+                const sortedR4 = selectedCoupon.r4 ? [...selectedCoupon.r4].sort((a, b) => a.localeCompare(b, 'no-NO')) : [];
+                const sortedR2 = selectedCoupon.r2 ? [...selectedCoupon.r2].sort((a, b) => a.localeCompare(b, 'no-NO')) : [];
+
+                const renderTeamBadge = (team, actualList, isUndetermined) => {
+                  const isQualified = actualList.includes(team);
+                  const colorClass = isUndetermined
+                    ? "bg-slate-900/40 text-slate-300 border-slate-800/80"
+                    : isQualified
+                      ? "bg-emerald-950/40 text-emerald-400 border-emerald-800/60"
+                      : "bg-red-955/20 text-red-400 border-red-900/50";
+                  return (
+                    <span key={team} className={`px-2.5 py-1 rounded border text-[11px] font-semibold transition-all ${colorClass}`}>
+                      {team}
+                    </span>
+                  );
+                };
+
+                return (
+                  <div className="space-y-3 pt-4 border-t border-slate-800">
+                    <h4 className="font-black text-xs text-emerald-400 uppercase tracking-widest border-b border-slate-800 pb-1.5 flex items-center gap-1.5">
+                      <Award className="w-4 h-4" /> Sluttspillsvalg
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      
+                      {/* 16-delsfinalister */}
+                      <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-855 space-y-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">16-delsfinalister (32 lag)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedR32.length > 0 ? (
+                            sortedR32.map(team => renderTeamBadge(team, actualR32, isR32Undetermined))
+                          ) : (
+                            <span className="text-slate-655 italic text-[11px]">Ingen tips registrert</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 8-delsfinalister */}
+                      <div className="bg-slate-955/20 p-3 rounded-xl border border-slate-855 space-y-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">8-delsfinalister (16 lag)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedR16.length > 0 ? (
+                            sortedR16.map(team => renderTeamBadge(team, actualPlayoffs.r16 || [], isR16Undetermined))
+                          ) : (
+                            <span className="text-slate-655 italic text-[11px]">Ingen tips registrert</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Kvartfinalister */}
+                      <div className="bg-slate-955/20 p-3 rounded-xl border border-slate-855 space-y-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">Kvartfinalister (8 lag)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedR8.length > 0 ? (
+                            sortedR8.map(team => renderTeamBadge(team, actualPlayoffs.r8 || [], isR8Undetermined))
+                          ) : (
+                            <span className="text-slate-655 italic text-[11px]">Ingen tips registrert</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Semifinalister */}
+                      <div className="bg-slate-955/20 p-3 rounded-xl border border-slate-855 space-y-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">Semifinalister (4 lag)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedR4.length > 0 ? (
+                            sortedR4.map(team => renderTeamBadge(team, actualPlayoffs.r4 || [], isR4Undetermined))
+                          ) : (
+                            <span className="text-slate-655 italic text-[11px]">Ingen tips registrert</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Finalister */}
+                      <div className="bg-slate-955/20 p-3 rounded-xl border border-slate-855 space-y-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">Finalister (2 lag)</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedR2.length > 0 ? (
+                            sortedR2.map(team => renderTeamBadge(team, actualPlayoffs.r2 || [], isR2Undetermined))
+                          ) : (
+                            <span className="text-slate-655 italic text-[11px]">Ingen tips registrert</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Verdensmester */}
+                      <div className="bg-gradient-to-br from-slate-955 to-amber-955/20 p-3 rounded-xl border border-amber-900/40 space-y-1">
+                        <span className="text-amber-400 font-black block text-[10px] uppercase tracking-wider flex items-center gap-1">🏆 Verdensmester</span>
+                        <p className="text-white font-black text-sm tracking-wide">
+                          {selectedCoupon.winner || <span className="text-slate-655 italic font-normal text-xs">Ikke valgt</span>}
+                        </p>
+                      </div>
+
+                      {/* Toppscorer */}
+                      <div className="bg-slate-955/20 p-3 rounded-xl border border-slate-855 space-y-1 md:col-span-2">
+                        <span className="text-slate-405 font-bold block text-[10px] uppercase tracking-wider">⚽ Mesterskapets Toppscorer</span>
+                        <p className="text-slate-200 font-bold text-xs">
+                          {selectedCoupon.topscorer || <span className="text-slate-655 italic font-normal">Ikke oppgitt</span>}
+                        </p>
+                      </div>
+
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="p-4 bg-slate-950 border-t border-slate-800 text-center sticky bottom-0 z-10">
+              <button
+                onClick={() => setSelectedCoupon(null)}
+                className="py-2 px-6 bg-emerald-500 hover:bg-emerald-400 text-slate-955 font-black text-xs rounded-xl shadow-md transition-all transform hover:scale-105"
+              >
+                Lukk vindu
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
